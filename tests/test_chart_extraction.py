@@ -1,6 +1,7 @@
 import io
 import os
 import sys
+import tempfile
 import unittest
 import requests
 import mido
@@ -15,6 +16,7 @@ from chart_extractor import (
     create_song_ini,
     extract_chart_files,
 )
+from FFR import FortniteTracksGUI
 
 
 class TestChartExtraction(unittest.TestCase):
@@ -87,6 +89,40 @@ class TestChartExtraction(unittest.TestCase):
             if os.path.exists(test_dir):
                 import shutil
                 shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_unified_song_folder(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            class DummyApp:
+                def __init__(self, folder):
+                    self.extract_folder = folder
+                sanitize_folder_name = FortniteTracksGUI.sanitize_folder_name
+                get_song_folder = FortniteTracksGUI.get_song_folder
+
+            app = DummyApp(tmpdir)
+
+            # 1. New folder creation: exactly the song title, no '- stems' or '- chart' suffix
+            folder = app.get_song_folder("Butter Barn Hoedown", "Epic Games")
+            expected = os.path.join(tmpdir, "Butter Barn Hoedown")
+            self.assertEqual(folder, expected)
+            self.assertTrue(os.path.isdir(expected))
+
+            # 2. Legacy migration: if separate stems/chart folders already exist, merge them
+            legacy_stems = os.path.join(tmpdir, "Legacy Track - stems")
+            legacy_chart = os.path.join(tmpdir, "Legacy Track - chart")
+            os.makedirs(legacy_stems, exist_ok=True)
+            os.makedirs(legacy_chart, exist_ok=True)
+            with open(os.path.join(legacy_stems, "Drums.wav"), "w") as f:
+                f.write("audio")
+            with open(os.path.join(legacy_chart, "notes.chart"), "w") as f:
+                f.write("chart")
+
+            unified = app.get_song_folder("Legacy Track", "Artist")
+            expected_unified = os.path.join(tmpdir, "Legacy Track")
+            self.assertEqual(unified, expected_unified)
+            self.assertTrue(os.path.exists(os.path.join(expected_unified, "Drums.wav")))
+            self.assertTrue(os.path.exists(os.path.join(expected_unified, "notes.chart")))
+            self.assertFalse(os.path.exists(legacy_stems), "Legacy stems folder should be removed after merge")
+            self.assertFalse(os.path.exists(legacy_chart), "Legacy chart folder should be removed after merge")
 
 
 if __name__ == "__main__":

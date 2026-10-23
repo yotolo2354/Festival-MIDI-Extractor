@@ -44,7 +44,7 @@ The program is written to `dist/`. To run without building: `python FFR.py`.
 2. Search for a song or browse the list
 3. Click on a track to view details
 4. Press **Download** to start the extraction
-5. Audio stems will be saved in your selected folder
+5. Audio stems, `.chart`, `.mid`, `song.ini`, and `album.png` will all be saved together in the exact same song folder (ready to drag & drop into Clone Hero / YARG)
 
 ## ⚙️ Settings
 - **Sorting Options**: Sort tracks by name, artist, or last added  

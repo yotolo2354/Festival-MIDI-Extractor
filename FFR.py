@@ -8,6 +8,7 @@ from io import BytesIO
 import os
 import sys
 import json
+import shutil
 import subprocess 
 import re  
 import webbrowser
@@ -1047,15 +1048,16 @@ class FortniteTracksGUI:
 
                         self.update_status("Creating audio stems...")
                         self.update_progress(75)
-                        stem_folder = self.extract_audio_stems(track_path, key_hex, song['title'], song['artist'])
+                        song_folder = self.get_song_folder(song['title'], song.get('artist', ''))
+                        self.extract_audio_stems(track_path, key_hex, song['title'], song['artist'], song_folder=song_folder)
 
-                        # Extract .chart and rhythm game files if enabled
+                        # Extract .chart and rhythm game files into the exact same song folder
                         if getattr(self, 'extract_chart_var', None) and (self.extract_chart_var.get() or self.extract_mid_var.get()):
                             self.update_status("Extracting .chart & MIDI files...")
                             self.update_progress(95)
                             try:
                                 extract_chart_files(
-                                    song, stem_folder,
+                                    song, song_folder,
                                     export_chart=self.extract_chart_var.get(),
                                     export_mid=self.extract_mid_var.get(),
                                     export_ini=self.extract_ini_var.get(),
@@ -1065,8 +1067,8 @@ class FortniteTracksGUI:
                             except Exception as chart_err:
                                 print(f"Warning: Chart extraction failed: {chart_err}")
 
-                        if self.auto_open_folder and stem_folder:
-                            self.open_folder_in_explorer(stem_folder)
+                        if self.auto_open_folder and song_folder:
+                            self.open_folder_in_explorer(song_folder)
 
                     self.update_status("Done!")
                     self.update_progress(100)
@@ -1084,13 +1086,11 @@ class FortniteTracksGUI:
             try:
                 self.update_status("Exporting .chart & MIDI files...")
                 self.update_progress(20)
-                sanitized_title = self.sanitize_folder_name(song['title'])
-                target_folder = os.path.join(self.extract_folder, f"{sanitized_title} - chart")
-                os.makedirs(target_folder, exist_ok=True)
+                song_folder = self.get_song_folder(song['title'], song.get('artist', ''))
                 self.update_progress(50)
 
                 created = extract_chart_files(
-                    song, target_folder,
+                    song, song_folder,
                     export_chart=self.extract_chart_var.get(),
                     export_mid=self.extract_mid_var.get(),
                     export_ini=self.extract_ini_var.get(),
@@ -1098,10 +1098,10 @@ class FortniteTracksGUI:
                     session=http
                 )
                 self.update_progress(100)
-                self.update_status(f"Exported {len(created)} chart files to {target_folder}")
+                self.update_status(f"Exported {len(created)} chart files to {song_folder}")
 
                 if self.auto_open_folder:
-                    self.open_folder_in_explorer(target_folder)
+                    self.open_folder_in_explorer(song_folder)
             except Exception as e:
                 self.run_on_ui(lambda: messagebox.showerror("Error", f"Failed to export chart: {e}"))
                 self.update_status("Chart export failed")
@@ -1151,7 +1151,7 @@ class FortniteTracksGUI:
 
         # Files
         files = page('Files')
-        field_label(files, 0, "Save stems in")
+        field_label(files, 0, "Save songs in")
         self.folder_var = tk.StringVar(value=self.extract_folder)
         ttk.Entry(files, textvariable=self.folder_var, state="readonly", width=30).grid(row=0, column=1, sticky='ew', pady=6)
         ttk.Button(files, text="Browse...", command=self.choose_folder).grid(row=0, column=2, padx=(8, 0), pady=6)
@@ -1161,7 +1161,7 @@ class FortniteTracksGUI:
                  ["Only Stem Type", "Song Name - Stem Type", "Artist Name - Song Name - Stem Type"], self.save_settings, columnspan=2)
 
         self.auto_open_var = tk.BooleanVar(value=self.auto_open_folder)
-        ttk.Checkbutton(files, text="Open the stems folder after extraction", variable=self.auto_open_var,
+        ttk.Checkbutton(files, text="Open song folder after extraction", variable=self.auto_open_var,
                         style="Switch.TCheckbutton", command=self.toggle_auto_open).grid(row=2, column=0, columnspan=3, sticky='w', pady=(12, 4))
 
         # Audio
@@ -1603,6 +1603,49 @@ class FortniteTracksGUI:
     def sanitize_folder_name(self, name):
         return re.sub(r'[<>:"/\\|?*]', '', name)
 
+    def get_song_folder(self, song_title, artist_name=""):
+        """Get the unified folder path for a song's stems, charts, and metadata."""
+        os.makedirs(self.extract_folder, exist_ok=True)
+        safe_title = self.sanitize_folder_name(song_title).strip()
+
+        # Primary unified folder path: clean song title
+        primary_folder = os.path.join(self.extract_folder, safe_title)
+
+        # Legacy split folders from earlier extractions
+        legacy_stems = os.path.join(self.extract_folder, f"{safe_title} - stems")
+        legacy_chart = os.path.join(self.extract_folder, f"{safe_title} - chart")
+
+        has_stems = os.path.isdir(legacy_stems)
+        has_chart = os.path.isdir(legacy_chart)
+
+        # If legacy split folders exist, automatically migrate and merge their files into the unified folder
+        if has_stems or has_chart:
+            os.makedirs(primary_folder, exist_ok=True)
+            if has_stems:
+                for item in os.listdir(legacy_stems):
+                    src = os.path.join(legacy_stems, item)
+                    dst = os.path.join(primary_folder, item)
+                    if not os.path.exists(dst):
+                        shutil.move(src, dst)
+                try:
+                    os.rmdir(legacy_stems)
+                except OSError:
+                    pass
+            if has_chart:
+                for item in os.listdir(legacy_chart):
+                    src = os.path.join(legacy_chart, item)
+                    dst = os.path.join(primary_folder, item)
+                    if not os.path.exists(dst):
+                        shutil.move(src, dst)
+                try:
+                    os.rmdir(legacy_chart)
+                except OSError:
+                    pass
+            return primary_folder
+
+        os.makedirs(primary_folder, exist_ok=True)
+        return primary_folder
+
     def generate_filename(self, stem_name, song_title, artist_name, file_extension):
         """Generate filename based on user's naming preference"""
         naming_method = self.file_naming_var.get()
@@ -1632,12 +1675,11 @@ class FortniteTracksGUI:
             return [("master", None)]
         return [(name, [2 * i, 2 * i + 1]) for i, name in enumerate(STEM_NAMES)]
 
-    def extract_audio_stems(self, track_path, key_hex, song_title, artist_name):
+    def extract_audio_stems(self, track_path, key_hex, song_title, artist_name, song_folder=None):
         """Decrypt and decode the 10-channel track and write the stems, chunk by chunk to keep memory low"""
-        os.makedirs(self.extract_folder, exist_ok=True)
-        sanitized_title = self.sanitize_folder_name(song_title)
-        stem_folder = os.path.join(self.extract_folder, f"{sanitized_title} - stems")
-        os.makedirs(stem_folder, exist_ok=True)
+        if song_folder is None:
+            song_folder = self.get_song_folder(song_title, artist_name)
+        os.makedirs(song_folder, exist_ok=True)
 
         selected_format = self.file_format_var.get()
         plan = self.stem_plan()
@@ -1654,7 +1696,7 @@ class FortniteTracksGUI:
 
                 for name, picks in plan:
                     filename = self.generate_filename(name, song_title, artist_name, selected_format)
-                    container = av.open(os.path.join(stem_folder, filename), 'w')
+                    container = av.open(os.path.join(song_folder, filename), 'w')
                     out_stream = container.add_stream(AUDIO_CODECS[selected_format], rate=rate,
                                                       layout='mono' if picks and len(picks) == 1 else 'stereo')
                     if selected_format == "mp3":
@@ -1706,9 +1748,9 @@ class FortniteTracksGUI:
             for container, out_stream, picks in outputs:
                 container.close()
 
-        print(f"Audio extracted successfully into folder: {stem_folder}")
+        print(f"Audio extracted successfully into folder: {song_folder}")
         self.update_progress(95)
-        return stem_folder
+        return song_folder
 
     def open_folder_in_explorer(self, folder):
         """Open folder in Windows Explorer, macOS Finder, or Linux file manager"""
