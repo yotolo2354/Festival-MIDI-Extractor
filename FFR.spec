@@ -3,12 +3,15 @@
 # the audio libraries are all inside it:
 #
 #     pip install -r requirements.txt pyinstaller
-#     pyinstaller FFR.spec
+#     python -m PyInstaller FFR.spec
 #
 # Output in dist/: "Festival Extractor.exe" on Windows, "Festival Extractor.app" on macOS,
 # "Festival Extractor" on Linux.
 import sys
+import os
 from PyInstaller.utils.hooks import collect_data_files
+
+icon_file = 'media/icon.ico' if os.path.exists('media/icon.ico') and sys.platform == 'win32' else 'media/icon.png'
 
 a = Analysis(
     ['FFR.py'],
@@ -38,7 +41,7 @@ if sys.platform == 'darwin':
         coll,
         name='Festival Extractor.app',
         icon='media/icon.png',
-        bundle_identifier='com.ilayezra.festivalextractor',
+        bundle_identifier='com.yotolo18804.festivalextractor',
         info_plist={'NSHighResolutionCapable': True},
     )
 else:
@@ -48,7 +51,7 @@ else:
         a.binaries,
         a.datas,
         name='Festival Extractor',
-        icon='media/icon.png',
+        icon=icon_file,
         console=False,
         upx=False,
     )
