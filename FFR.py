@@ -293,7 +293,7 @@ class FortniteTracksGUI:
         self.extract_album_art = settings.get("extract_album_art", True)
         self.extract_album_art_var = tk.BooleanVar(value=self.extract_album_art)
 
-        self.root.title("Fortnite Festival Extractor")
+        self.root.title("Fortnite Festival MIDI Extractor")
         self.root.geometry("1000x640")
         self.root.minsize(860, 560)
 
@@ -1248,12 +1248,14 @@ class FortniteTracksGUI:
         about.columnconfigure(0, weight=1)
         if self.cached_logo:
             ttk.Label(about, image=self.cached_logo).grid(row=0, column=0, pady=(0, 10))
-        ttk.Label(about, text="Fortnite Festival Extractor is an unofficial open-source\nprogram to download and extract FF songs into stems.",
-                  justify="center").grid(row=1, column=0, pady=(0, 10))
-        github_link = ttk.Label(about, text="Visit the GitHub page", style="Link.TLabel", cursor="hand2")
-        github_link.grid(row=2, column=0, pady=(0, 10))
-        github_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/ilayezra/Festival-Extractor"))
-        ttk.Label(about, text="Having issues? Contact me at ilayezra37@gmail.com", style="Muted.TLabel").grid(row=3, column=0)
+        ttk.Label(about, text="Fortnite Festival MIDI Extractor\nOpen-source fork of Festival-Extractor by Ilay Ezra.\nExtracts audio stems and decrypted multi-track MIDI for Clone Hero / YARG.",
+                  justify="center").grid(row=1, column=0, pady=(0, 8))
+        fork_link = ttk.Label(about, text="Visit Festival-Midi-Extractor on GitHub", style="Link.TLabel", cursor="hand2")
+        fork_link.grid(row=2, column=0, pady=(0, 4))
+        fork_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/yotolo18804/Festival-Midi-Extractor"))
+        orig_link = ttk.Label(about, text="Original upstream: ilayezra/Festival-Extractor", style="Muted.TLabel", cursor="hand2")
+        orig_link.grid(row=3, column=0, pady=(0, 8))
+        orig_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/ilayezra/Festival-Extractor"))
 
         ttk.Button(window, text="Close", style="Accent.TButton", width=10, command=window.destroy).pack(side='right', padx=12, pady=12)
 
