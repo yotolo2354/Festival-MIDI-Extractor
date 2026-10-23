@@ -1,0 +1,93 @@
+import io
+import os
+import sys
+import unittest
+import requests
+import mido
+
+# Add project root to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from chart_extractor import (
+    FESTIVAL_MIDI_KEY,
+    decrypt_midi,
+    midi_to_chart,
+    create_song_ini,
+    extract_chart_files,
+)
+
+
+class TestChartExtraction(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Butter Barn Hoedown test data
+        cls.dat_url = "https://cdn2.unrealengine.com/y3iotu5bothnse3s-71d4f25bc425.dat"
+        cls.song_info = {
+            "title": "Butter Barn Hoedown",
+            "artist": "Epic Games",
+            "album": "Fortnite",
+            "release_year": 2021,
+            "genre": ["Country"],
+            "duration": 157,
+            "mu": cls.dat_url,
+            "cover_art_url": "https://cdn2.unrealengine.com/8trfqm9nofp8xeoj-512x512-4d008e153456.jpg",
+            "intensities": {"pg": 4, "pb": 2, "pd": 1, "vl": 4, "gr": 4, "ba": 1, "ds": 2},
+            "qi_data": {"preview": {"starttime": 44.0816}},
+        }
+        resp = requests.get(cls.dat_url, timeout=20)
+        resp.raise_for_status()
+        cls.raw_dat = resp.content
+
+    def test_decryption(self):
+        mid_bytes = decrypt_midi(self.raw_dat, FESTIVAL_MIDI_KEY)
+        self.assertTrue(mid_bytes.startswith(b"MThd"), "Decrypted file must start with MIDI header MThd")
+        mid = mido.MidiFile(file=io.BytesIO(mid_bytes))
+        self.assertGreater(len(mid.tracks), 0, "MIDI must contain tracks")
+        track_names = [t.name for t in mid.tracks]
+        self.assertIn("PLASTIC GUITAR", track_names)
+        self.assertIn("PLASTIC DRUMS", track_names)
+        self.assertIn("PLASTIC BASS", track_names)
+
+    def test_chart_conversion(self):
+        mid_bytes = decrypt_midi(self.raw_dat, FESTIVAL_MIDI_KEY)
+        mid = mido.MidiFile(file=io.BytesIO(mid_bytes))
+        chart_text = midi_to_chart(mid, self.song_info)
+
+        self.assertIn("[Song]", chart_text)
+        self.assertIn('Name = "Butter Barn Hoedown"', chart_text)
+        self.assertIn("[SyncTrack]", chart_text)
+        self.assertIn("[Events]", chart_text)
+        self.assertIn("[ExpertSingle]", chart_text)
+        self.assertIn("[ExpertDoubleBass]", chart_text)
+        self.assertIn("[ExpertDrums]", chart_text)
+
+    def test_song_ini_generation(self):
+        ini_text = create_song_ini(self.song_info)
+        self.assertIn("[song]", ini_text)
+        self.assertIn("name = Butter Barn Hoedown", ini_text)
+        self.assertIn("artist = Epic Games", ini_text)
+        self.assertIn("diff_guitar = 4", ini_text)
+        self.assertIn("diff_bass = 2", ini_text)
+        self.assertIn("diff_drums = 1", ini_text)
+
+    def test_extract_chart_files_end_to_end(self):
+        test_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "tmp_test_output"))
+        try:
+            created = extract_chart_files(self.song_info, test_dir)
+            self.assertTrue(os.path.exists(os.path.join(test_dir, "notes.chart")))
+            self.assertTrue(os.path.exists(os.path.join(test_dir, "notes.mid")))
+            self.assertTrue(os.path.exists(os.path.join(test_dir, "song.ini")))
+            self.assertTrue(os.path.exists(os.path.join(test_dir, "album.png")))
+
+            chart_size = os.path.getsize(os.path.join(test_dir, "notes.chart"))
+            mid_size = os.path.getsize(os.path.join(test_dir, "notes.mid"))
+            self.assertGreater(chart_size, 50000, "notes.chart size should be substantial")
+            self.assertGreater(mid_size, 50000, "notes.mid size should be substantial")
+        finally:
+            if os.path.exists(test_dir):
+                import shutil
+                shutil.rmtree(test_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    unittest.main()

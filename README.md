@@ -7,9 +7,11 @@ An advanced GUI-based tool that allows you to extract and download music tracks 
 ## 🚀 Features
 ✅ **Download Fortnite Festival songs** directly using their track IDs  
 ✅ **Extract audio stems** (Drums, Bass, Lead, Vocals, Other) in multiple formats (`wav`, `mp3`, `flac`)  
+✅ **Extract .chart & MIDI files** – Export `notes.chart` (Moonscraper/Clone Hero format), `notes.mid` (decrypted multi-track MIDI), `song.ini` (song metadata & difficulty ratings), and `album.png`  
+✅ **Quick Export Option** – Download only the chart & MIDI files in seconds without needing to download all audio stems  
 ✅ **User-friendly GUI** with dark/light theme    
 ✅ **Search & Sort** tracks by name, artist, or last added  
-✅ **Customizable settings**, including extraction folder and sorting options  
+✅ **Customizable settings**, including extraction folder, sorting, and rhythm game chart options  
 
 ## 📸 Screenshot
 ![Fortnite Festival Extractor](https://us-east-1.tixte.net/uploads/milki.tixte.co/promo.png)
@@ -46,12 +48,17 @@ The program is written to `dist/`. To run without building: `python FFR.py`.
 
 ## ⚙️ Settings
 - **Sorting Options**: Sort tracks by name, artist, or last added  
-- **Custom Naming**: you can choose if you want more details in your files name
+- **Custom Naming**: Choose if you want more details in your file names  
 - **Audio Format**: Export files as `wav`, `mp3`, or `flac`  
 - **Extraction Mode**:  
   - **Stereo** (default) – Keeps left & right channels together  
   - **Mono** – Extracts individual channels separately  
-  - **Single File** – Merges all channels into one master file
+  - **Single File** – Merges all channels into one master file  
+- **Charts & MIDI (Clone Hero / YARG)**:  
+  - **.chart export**: Generates `notes.chart` with Guitar (Single), Bass (DoubleBass), and Drums (with Pro Cymbals & 2x Kick)  
+  - **.mid export**: Decrypts the raw multi-track MIDI file (`notes.mid`)  
+  - **song.ini**: Automatically populates track difficulty stars, year, genre, and charter tags  
+  - **album.png**: Saves 512x512 high-resolution cover art  
 
 ## ©️ Credits
 Huge thanks to **[spiritascend](https://github.com/spiritascend)** for creating **[blurlconvert](https://github.com/spiritascend/blurlconvert/tree/main)**. thanks to his algorhythm this program exist

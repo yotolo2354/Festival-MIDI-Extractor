@@ -5,3 +5,4 @@ pygame
 sv-ttk
 av
 numpy
+mido
