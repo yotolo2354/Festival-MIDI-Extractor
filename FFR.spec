@@ -41,7 +41,7 @@ if sys.platform == 'darwin':
         coll,
         name='Festival Extractor.app',
         icon='media/icon.png',
-        bundle_identifier='com.yotolo18804.festivalextractor',
+        bundle_identifier='com.yotolo2354.festivalextractor',
         info_plist={'NSHighResolutionCapable': True},
     )
 else:

@@ -1252,7 +1252,7 @@ class FortniteTracksGUI:
                   justify="center").grid(row=1, column=0, pady=(0, 8))
         fork_link = ttk.Label(about, text="Visit Festival-Midi-Extractor on GitHub", style="Link.TLabel", cursor="hand2")
         fork_link.grid(row=2, column=0, pady=(0, 4))
-        fork_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/yotolo18804/Festival-Midi-Extractor"))
+        fork_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/yotolo2354/Festival-MIDI-Extractor"))
         orig_link = ttk.Label(about, text="Original upstream: ilayezra/Festival-Extractor", style="Muted.TLabel", cursor="hand2")
         orig_link.grid(row=3, column=0, pady=(0, 8))
         orig_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/ilayezra/Festival-Extractor"))
