@@ -27,7 +27,7 @@ An advanced GUI tool to download and extract **Fortnite Festival** music tracks 
 
 ## 🔧 Installation
 
-Download the file for your system from the latest **[Release](https://github.com/yotolo18804/Festival-Midi-Extractor/releases)** and unzip it.
+Download the file for your system from the latest **[Release](https://github.com/yotolo18804/Festival-MIDI-Extractor/releases)** and unzip it.
 Everything the program needs is built in - no ffmpeg or other files to install.
 
 ### Windows
@@ -80,6 +80,6 @@ This project is **open-source** and licensed under the **MIT License**, consiste
 Feel free to **fork this project** and submit a pull request if you have improvements!
 
 ## 📧 Repository & Issues
-- **Fork Repository:** [yotolo18804/Festival-Midi-Extractor](https://github.com/yotolo18804/Festival-Midi-Extractor)
+- **Fork Repository:** [yotolo18804/Festival-MIDI-Extractor](https://github.com/yotolo18804/Festival-MIDI-Extractor)
 - **Original Upstream:** [ilayezra/Festival-Extractor](https://github.com/ilayezra/Festival-Extractor)
-- For bug reports or feature requests, open an **[Issue](https://github.com/yotolo18804/Festival-Midi-Extractor/issues)**.
+- For bug reports or feature requests, open an **[Issue](https://github.com/yotolo18804/Festival-MIDI-Extractor/issues)**.
