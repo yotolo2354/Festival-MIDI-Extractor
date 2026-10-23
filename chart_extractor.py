@@ -287,7 +287,7 @@ def create_song_ini(song_info: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def extract_chart_files(song: dict, target_folder: str, export_chart: bool = True,
+def extract_chart_files(song: dict, target_folder: str, export_chart: bool = False,
                         export_mid: bool = True, export_ini: bool = True,
                         export_album_art: bool = True, session: requests.Session = None) -> list:
     """Download the encrypted .dat file from song['mu'], decrypt to MIDI, generate .chart and song.ini,
@@ -319,11 +319,9 @@ def extract_chart_files(song: dict, target_folder: str, export_chart: bool = Tru
         created_files.append(mid_path)
         print(f"Saved: {mid_path}")
 
-    # Parse with mido for .chart conversion
-    mid = mido.MidiFile(file=io.BytesIO(midi_bytes))
-
-    # 2. Save notes.chart
+    # 2. Save notes.chart (only if explicitly enabled)
     if export_chart:
+        mid = mido.MidiFile(file=io.BytesIO(midi_bytes))
         chart_content = midi_to_chart(mid, song)
         chart_path = os.path.join(target_folder, "notes.chart")
         with open(chart_path, "w", encoding="utf-8") as f:

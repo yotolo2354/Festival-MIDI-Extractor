@@ -72,18 +72,18 @@ class TestChartExtraction(unittest.TestCase):
         self.assertIn("diff_bass = 2", ini_text)
         self.assertIn("diff_drums = 1", ini_text)
 
-    def test_extract_chart_files_end_to_end(self):
+    def test_extract_midi_files_end_to_end(self):
         test_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "tmp_test_output"))
         try:
             created = extract_chart_files(self.song_info, test_dir)
-            self.assertTrue(os.path.exists(os.path.join(test_dir, "notes.chart")))
-            self.assertTrue(os.path.exists(os.path.join(test_dir, "notes.mid")))
-            self.assertTrue(os.path.exists(os.path.join(test_dir, "song.ini")))
-            self.assertTrue(os.path.exists(os.path.join(test_dir, "album.png")))
+            # Must NOT create .chart
+            self.assertFalse(os.path.exists(os.path.join(test_dir, "notes.chart")), "notes.chart should NOT be created by default")
+            # Must create .mid, song.ini, and album.png
+            self.assertTrue(os.path.exists(os.path.join(test_dir, "notes.mid")), "notes.mid must be created")
+            self.assertTrue(os.path.exists(os.path.join(test_dir, "song.ini")), "song.ini must be created")
+            self.assertTrue(os.path.exists(os.path.join(test_dir, "album.png")), "album.png must be created")
 
-            chart_size = os.path.getsize(os.path.join(test_dir, "notes.chart"))
             mid_size = os.path.getsize(os.path.join(test_dir, "notes.mid"))
-            self.assertGreater(chart_size, 50000, "notes.chart size should be substantial")
             self.assertGreater(mid_size, 50000, "notes.mid size should be substantial")
         finally:
             if os.path.exists(test_dir):
@@ -113,14 +113,14 @@ class TestChartExtraction(unittest.TestCase):
             os.makedirs(legacy_chart, exist_ok=True)
             with open(os.path.join(legacy_stems, "Drums.wav"), "w") as f:
                 f.write("audio")
-            with open(os.path.join(legacy_chart, "notes.chart"), "w") as f:
-                f.write("chart")
+            with open(os.path.join(legacy_chart, "notes.mid"), "w") as f:
+                f.write("midi")
 
             unified = app.get_song_folder("Legacy Track", "Artist")
             expected_unified = os.path.join(tmpdir, "Legacy Track")
             self.assertEqual(unified, expected_unified)
             self.assertTrue(os.path.exists(os.path.join(expected_unified, "Drums.wav")))
-            self.assertTrue(os.path.exists(os.path.join(expected_unified, "notes.chart")))
+            self.assertTrue(os.path.exists(os.path.join(expected_unified, "notes.mid")))
             self.assertFalse(os.path.exists(legacy_stems), "Legacy stems folder should be removed after merge")
             self.assertFalse(os.path.exists(legacy_chart), "Legacy chart folder should be removed after merge")
 

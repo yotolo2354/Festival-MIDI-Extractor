@@ -284,7 +284,7 @@ class FortniteTracksGUI:
         self.extracting_method_var = tk.StringVar(value=self.extracting_method)
         self.file_naming = settings.get("file_naming", "Only Stem Type")
         self.file_naming_var = tk.StringVar(value=self.file_naming)
-        self.extract_chart = settings.get("extract_chart", True)
+        self.extract_chart = settings.get("extract_chart", False)
         self.extract_chart_var = tk.BooleanVar(value=self.extract_chart)
         self.extract_mid = settings.get("extract_mid", True)
         self.extract_mid_var = tk.BooleanVar(value=self.extract_mid)
@@ -586,9 +586,9 @@ class FortniteTracksGUI:
             return
 
         if query:
-            prompt = f"Add {count} song{'s' if count != 1 else ''} matching '{query}' to the queue for Full Export (stems, .chart, MIDI, and metadata) and start downloading?"
+            prompt = f"Add {count} song{'s' if count != 1 else ''} matching '{query}' to the queue for Full Export (stems, MIDI, and metadata) and start downloading?"
         else:
-            prompt = f"Add all {count} songs in Fortnite Festival to the queue for Full Export (stems, .chart, MIDI, and metadata) and start downloading?"
+            prompt = f"Add all {count} songs in Fortnite Festival to the queue for Full Export (stems, MIDI, and metadata) and start downloading?"
 
         if not messagebox.askyesno("Full Export All Songs", prompt):
             return
@@ -1087,24 +1087,24 @@ class FortniteTracksGUI:
                         song_folder = self.get_song_folder(song['title'], song.get('artist', ''))
                         self.extract_audio_stems(track_path, key_hex, song['title'], song['artist'], song_folder=song_folder)
 
-                        # Extract .chart and rhythm game files into the exact same song folder
-                        should_export_charts = full_export or (
-                            getattr(self, 'extract_chart_var', None) and (self.extract_chart_var.get() or self.extract_mid_var.get())
+                        # Extract multi-track MIDI and metadata into the exact same song folder (no .chart)
+                        should_export_midi = full_export or (
+                            getattr(self, 'extract_mid_var', None) and self.extract_mid_var.get()
                         )
-                        if should_export_charts and song.get('mu'):
-                            self.update_status("Extracting .chart & MIDI files...")
+                        if should_export_midi and song.get('mu'):
+                            self.update_status("Extracting MIDI & metadata files...")
                             self.update_progress(95)
                             try:
                                 extract_chart_files(
                                     song, song_folder,
-                                    export_chart=True if full_export else self.extract_chart_var.get(),
-                                    export_mid=True if full_export else self.extract_mid_var.get(),
+                                    export_chart=False,
+                                    export_mid=True,
                                     export_ini=True if full_export else self.extract_ini_var.get(),
                                     export_album_art=True if full_export else self.extract_album_art_var.get(),
                                     session=http
                                 )
-                            except Exception as chart_err:
-                                print(f"Warning: Chart extraction failed: {chart_err}")
+                            except Exception as midi_err:
+                                print(f"Warning: MIDI extraction failed: {midi_err}")
 
                         if self.auto_open_folder and song_folder:
                             self.open_folder_in_explorer(song_folder)
@@ -1115,37 +1115,39 @@ class FortniteTracksGUI:
 
         raise Exception("Could not find valid download URL in the response")
 
-    def export_chart_only(self, song):
-        """Quickly export .chart, .mid, and song.ini without downloading the audio stems"""
+    def export_midi_only(self, song):
+        """Quickly export .mid, song.ini, and album.png without downloading audio stems"""
         if not song.get('mu'):
-            messagebox.showwarning("No Chart Data", f"No chart data available for '{song.get('title', 'this song')}'")
+            messagebox.showwarning("No MIDI Data", f"No MIDI data available for '{song.get('title', 'this song')}'")
             return
 
         def worker():
             try:
-                self.update_status("Exporting .chart & MIDI files...")
+                self.update_status("Exporting MIDI & metadata files...")
                 self.update_progress(20)
                 song_folder = self.get_song_folder(song['title'], song.get('artist', ''))
                 self.update_progress(50)
 
                 created = extract_chart_files(
                     song, song_folder,
-                    export_chart=self.extract_chart_var.get(),
-                    export_mid=self.extract_mid_var.get(),
-                    export_ini=self.extract_ini_var.get(),
-                    export_album_art=self.extract_album_art_var.get(),
+                    export_chart=False,
+                    export_mid=True,
+                    export_ini=self.extract_ini_var.get() if hasattr(self, 'extract_ini_var') else True,
+                    export_album_art=self.extract_album_art_var.get() if hasattr(self, 'extract_album_art_var') else True,
                     session=http
                 )
                 self.update_progress(100)
-                self.update_status(f"Exported {len(created)} chart files to {song_folder}")
+                self.update_status(f"Exported {len(created)} MIDI/metadata files to {song_folder}")
 
                 if self.auto_open_folder:
                     self.open_folder_in_explorer(song_folder)
             except Exception as e:
-                self.run_on_ui(lambda: messagebox.showerror("Error", f"Failed to export chart: {e}"))
-                self.update_status("Chart export failed")
+                self.run_on_ui(lambda: messagebox.showerror("Error", f"Failed to export MIDI: {e}"))
+                self.update_status("MIDI export failed")
 
         threading.Thread(target=worker, daemon=True).start()
+
+    export_chart_only = export_midi_only
 
     def open_settings_window(self):
         if hasattr(self, "settings_window") and self.settings_window.winfo_exists():
@@ -1223,27 +1225,23 @@ class FortniteTracksGUI:
         dropdown(audio, 1, self.extracting_method_var, ["Stereo", "Mono", "Single File"], method_changed)
         method_changed()
 
-        # Rhythm Game / Charts
-        charts_page = page('Charts & MIDI')
-        charts_help = ttk.Label(charts_page, text="Export notes and metadata compatible with Clone Hero, YARG, and Moonscraper.",
+        # Rhythm Game / MIDI
+        charts_page = page('MIDI & Metadata')
+        charts_help = ttk.Label(charts_page, text="Export decrypted multi-track MIDI notes and metadata compatible with Clone Hero and YARG.",
                                 style="Muted.TLabel", wraplength=420, justify="left")
         charts_help.grid(row=0, column=0, columnspan=2, sticky='w', pady=(0, 10))
 
-        ttk.Checkbutton(charts_page, text="Export .chart file (Clone Hero / Moonscraper format)",
-                        variable=self.extract_chart_var, style="Switch.TCheckbutton", command=self.save_settings).grid(
-            row=1, column=0, columnspan=2, sticky='w', pady=6)
-
         ttk.Checkbutton(charts_page, text="Export decrypted .mid file (Multi-track MIDI)",
                         variable=self.extract_mid_var, style="Switch.TCheckbutton", command=self.save_settings).grid(
-            row=2, column=0, columnspan=2, sticky='w', pady=6)
+            row=1, column=0, columnspan=2, sticky='w', pady=6)
 
         ttk.Checkbutton(charts_page, text="Export song.ini (Difficulties & metadata)",
                         variable=self.extract_ini_var, style="Switch.TCheckbutton", command=self.save_settings).grid(
-            row=3, column=0, columnspan=2, sticky='w', pady=6)
+            row=2, column=0, columnspan=2, sticky='w', pady=6)
 
         ttk.Checkbutton(charts_page, text="Save cover art as album.png",
                         variable=self.extract_album_art_var, style="Switch.TCheckbutton", command=self.save_settings).grid(
-            row=4, column=0, columnspan=2, sticky='w', pady=6)
+            row=3, column=0, columnspan=2, sticky='w', pady=6)
 
         # About
         about = page('About & Help')
@@ -1364,7 +1362,7 @@ class FortniteTracksGUI:
                     "file_format": settings.get("file_format", "wav"),
                     "extracting_method": settings.get("extracting_method", "Stereo"),
                     "file_naming": settings.get("file_naming", "Only Stem Type"),
-                    "extract_chart": settings.get("extract_chart", True),
+                    "extract_chart": settings.get("extract_chart", False),
                     "extract_mid": settings.get("extract_mid", True),
                     "extract_ini": settings.get("extract_ini", True),
                     "extract_album_art": settings.get("extract_album_art", True)
@@ -1378,7 +1376,7 @@ class FortniteTracksGUI:
             "file_format": "wav",
             "extracting_method": "Stereo",
             "file_naming": "Only Stem Type",
-            "extract_chart": True,
+            "extract_chart": False,
             "extract_mid": True,
             "extract_ini": True,
             "extract_album_art": True
@@ -1562,7 +1560,7 @@ class FortniteTracksGUI:
         elif status == 'Waiting' and self.downloading:
             full_export_text = "Waiting in queue..."
         else:
-            full_export_text = {'Done': "⚡  Full Export Again", 'Failed': "⚡  Retry Full Export"}.get(status, "⚡  Full Export (Stems + Charts)")
+            full_export_text = {'Done': "⚡  Full Export Again", 'Failed': "⚡  Retry Full Export"}.get(status, "⚡  Full Export (Stems + MIDI)")
         full_export_button = ttk.Button(self.song_info_frame, text=full_export_text, style="Accent.TButton",
                                          command=lambda: self.download_now(song, full_export=True))
         full_export_button.pack(fill=tk.X, padx=10)
@@ -1578,11 +1576,11 @@ class FortniteTracksGUI:
         if status == 'Downloading' or (status == 'Waiting' and self.downloading):
             stems_button.state(['disabled'])
 
-        chart_button = ttk.Button(sub_buttons_frame, text="📄  Chart Only",
-                                  command=lambda: self.export_chart_only(song))
-        chart_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(3, 0))
+        midi_button = ttk.Button(sub_buttons_frame, text="🎼  MIDI Only",
+                                 command=lambda: self.export_midi_only(song))
+        midi_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(3, 0))
         if not song.get('mu'):
-            chart_button.state(['disabled'])
+            midi_button.state(['disabled'])
 
         buttons = ttk.Frame(self.song_info_frame)
         buttons.pack(fill=tk.X, padx=10, pady=(8, 0))

@@ -2,16 +2,17 @@
 
 ![Fortnite Festival Extractor](https://i.ibb.co/BvQtR3j/logo2.png)
 
-An advanced GUI-based tool that allows you to extract and download music tracks from **Fortnite Festival** into high-quality audio stems.
+An advanced GUI-based tool that allows you to extract and download music tracks from **Fortnite Festival** into high-quality audio stems and multi-track MIDI notes.
 
 ## 🚀 Features
 ✅ **Download Fortnite Festival songs** directly using their track IDs  
 ✅ **Extract audio stems** (Drums, Bass, Lead, Vocals, Other) in multiple formats (`wav`, `mp3`, `flac`)  
-✅ **Extract .chart & MIDI files** – Export `notes.chart` (Moonscraper/Clone Hero format), `notes.mid` (decrypted multi-track MIDI), `song.ini` (song metadata & difficulty ratings), and `album.png`  
-✅ **Quick Export Option** – Download only the chart & MIDI files in seconds without needing to download all audio stems  
+✅ **Extract Multi-track MIDI files** – Export `notes.mid` (decrypted official Harmonix multi-track MIDI), `song.ini` (song metadata & difficulty ratings), and `album.png`  
+✅ **Full Export Button** – Download all stems, MIDI, and metadata together in one go  
+✅ **Quick MIDI Export** – Download only the `notes.mid`, `song.ini`, and album art in seconds without needing to download large audio files  
 ✅ **User-friendly GUI** with dark/light theme    
 ✅ **Search & Sort** tracks by name, artist, or last added  
-✅ **Customizable settings**, including extraction folder, sorting, and rhythm game chart options  
+✅ **Customizable settings**, including extraction folder, sorting, and audio options  
 
 ## 📸 Screenshot
 ![Fortnite Festival Extractor](https://us-east-1.tixte.net/uploads/milki.tixte.co/promo.png)
@@ -43,8 +44,8 @@ The program is written to `dist/`. To run without building: `python FFR.py`.
 1. Launch **Fortnite Festival Extractor**
 2. Search for a song or browse the list
 3. Click on a track to view details
-4. Press **Download** to start the extraction
-5. Audio stems, `.chart`, `.mid`, `song.ini`, and `album.png` will all be saved together in the exact same song folder (ready to drag & drop into Clone Hero / YARG)
+4. Press **⚡ Full Export (Stems + MIDI)** to start the extraction
+5. Audio stems, `notes.mid`, `song.ini`, and `album.png` will all be saved together in the exact same song folder (ready to drag & drop into Clone Hero / YARG)
 
 ## ⚙️ Settings
 - **Sorting Options**: Sort tracks by name, artist, or last added  
@@ -54,8 +55,7 @@ The program is written to `dist/`. To run without building: `python FFR.py`.
   - **Stereo** (default) – Keeps left & right channels together  
   - **Mono** – Extracts individual channels separately  
   - **Single File** – Merges all channels into one master file  
-- **Charts & MIDI (Clone Hero / YARG)**:  
-  - **.chart export**: Generates `notes.chart` with Guitar (Single), Bass (DoubleBass), and Drums (with Pro Cymbals & 2x Kick)  
+- **MIDI & Metadata (Clone Hero / YARG)**:  
   - **.mid export**: Decrypts the raw multi-track MIDI file (`notes.mid`)  
   - **song.ini**: Automatically populates track difficulty stars, year, genre, and charter tags  
   - **album.png**: Saves 512x512 high-resolution cover art  
