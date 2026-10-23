@@ -309,6 +309,7 @@ class FortniteTracksGUI:
         top_bar = ttk.Frame(self.root, padding=(16, 14, 16, 10))
         top_bar.pack(fill=tk.X)
         ttk.Button(top_bar, text="⚙  Settings", command=self.open_settings_window).pack(side=tk.RIGHT)
+        ttk.Button(top_bar, text="⚡  Full Export All", command=self.full_export_all_songs).pack(side=tk.RIGHT, padx=(0, 8))
         self.song_count_label = ttk.Label(top_bar, text="Loading songs...", style="Muted.TLabel")
         self.song_count_label.pack(side=tk.RIGHT, padx=14)
 
@@ -374,8 +375,9 @@ class FortniteTracksGUI:
         self.queue_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.queue_tree.bind("<Double-1>", self.on_queue_double_click)
 
-        ttk.Button(self.queue_frame, text="⬇  Download All", style="Accent.TButton",
+        ttk.Button(self.queue_frame, text="⬇  Download All in Queue", style="Accent.TButton",
                    command=self.download_all_queue).pack(fill=tk.X, pady=(10, 0))
+        ttk.Button(self.queue_frame, text="⚡  Full Export All Songs", command=self.full_export_all_songs).pack(fill=tk.X, pady=(6, 0))
         queue_buttons = ttk.Frame(self.queue_frame)
         queue_buttons.pack(fill=tk.X, pady=(8, 0))
         ttk.Button(queue_buttons, text="Remove", command=self.remove_selected_from_queue).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
@@ -558,20 +560,54 @@ class FortniteTracksGUI:
         pending = sum(1 for entry in self.song_queue if entry['status'] in ('Waiting', 'Downloading'))
         self.notebook.tab(self.queue_frame, text=f"Queue ({pending})" if pending else "Queue")
 
-    def add_to_queue(self, song):
+    def add_to_queue(self, song, full_export=True):
         """Add a song to the queue, or mark a finished/failed one to download again"""
         entry = self.find_queue_entry(song)
         if entry is None:
-            self.song_queue.append({'song': song, 'status': 'Waiting', 'error': ''})
+            self.song_queue.append({'song': song, 'status': 'Waiting', 'error': '', 'full_export': full_export})
         elif entry['status'] in ('Done', 'Failed'):
             entry['status'], entry['error'] = 'Waiting', ''
+            entry['full_export'] = full_export
         self.refresh_queue_view()
         self.update_song_info_display()
 
-    def download_now(self, song):
+    def download_now(self, song, full_export=True):
         """Queue the song and start downloading right away if nothing is running"""
-        self.add_to_queue(song)
+        self.add_to_queue(song, full_export=full_export)
         self.start_queue()
+
+    def full_export_all_songs(self):
+        """Add all visible/filtered songs to the queue for Full Export and start downloading immediately"""
+        query = self.search_var.get().strip() if hasattr(self, 'search_var') and not getattr(self, 'search_placeholder_shown', False) else ""
+        songs_to_export = self.filtered_songs if hasattr(self, 'filtered_songs') and self.filtered_songs else self.songs
+        count = len(songs_to_export)
+        if not count:
+            messagebox.showinfo("No Songs", "No songs found to export.")
+            return
+
+        if query:
+            prompt = f"Add {count} song{'s' if count != 1 else ''} matching '{query}' to the queue for Full Export (stems, .chart, MIDI, and metadata) and start downloading?"
+        else:
+            prompt = f"Add all {count} songs in Fortnite Festival to the queue for Full Export (stems, .chart, MIDI, and metadata) and start downloading?"
+
+        if not messagebox.askyesno("Full Export All Songs", prompt):
+            return
+
+        added_count = 0
+        for song in songs_to_export:
+            entry = self.find_queue_entry(song)
+            if not entry:
+                self.song_queue.append({'song': song, 'status': 'Waiting', 'error': '', 'full_export': True})
+                added_count += 1
+            elif entry['status'] in ('Done', 'Failed'):
+                entry['status'], entry['error'] = 'Waiting', ''
+                entry['full_export'] = True
+                added_count += 1
+
+        self.refresh_queue_view()
+        self.update_song_info_display()
+        self.start_queue()
+        messagebox.showinfo("Full Export Started", f"Queued {added_count} song(s) for Full Export!")
 
     def check_easter_egg(self, query):
         """Check for easter egg and handle it"""
@@ -999,7 +1035,7 @@ class FortniteTracksGUI:
         """Background thread: download one queued song and report the result to the UI"""
         error = None
         try:
-            self.download_and_extract(entry['song'])
+            self.download_and_extract(entry['song'], full_export=entry.get('full_export', True))
         except requests.exceptions.RequestException as e:
             error = f"Download failed: {str(e)}"
         except Exception as e:
@@ -1008,8 +1044,8 @@ class FortniteTracksGUI:
             print(f"Failed: {entry['song']['title']}: {error}")
         self.run_on_ui(lambda: self.song_download_finished(entry, error))
 
-    def download_and_extract(self, song):
-        """Download a song and extract its stems (raises on failure)"""
+    def download_and_extract(self, song, full_export=True):
+        """Download a song and extract its stems and rhythm game files (raises on failure)"""
         if not song['sid']:
             raise Exception("No song ID available")
 
@@ -1052,16 +1088,19 @@ class FortniteTracksGUI:
                         self.extract_audio_stems(track_path, key_hex, song['title'], song['artist'], song_folder=song_folder)
 
                         # Extract .chart and rhythm game files into the exact same song folder
-                        if getattr(self, 'extract_chart_var', None) and (self.extract_chart_var.get() or self.extract_mid_var.get()):
+                        should_export_charts = full_export or (
+                            getattr(self, 'extract_chart_var', None) and (self.extract_chart_var.get() or self.extract_mid_var.get())
+                        )
+                        if should_export_charts and song.get('mu'):
                             self.update_status("Extracting .chart & MIDI files...")
                             self.update_progress(95)
                             try:
                                 extract_chart_files(
                                     song, song_folder,
-                                    export_chart=self.extract_chart_var.get(),
-                                    export_mid=self.extract_mid_var.get(),
-                                    export_ini=self.extract_ini_var.get(),
-                                    export_album_art=self.extract_album_art_var.get(),
+                                    export_chart=True if full_export else self.extract_chart_var.get(),
+                                    export_mid=True if full_export else self.extract_mid_var.get(),
+                                    export_ini=True if full_export else self.extract_ini_var.get(),
+                                    export_album_art=True if full_export else self.extract_album_art_var.get(),
                                     session=http
                                 )
                             except Exception as chart_err:
@@ -1519,20 +1558,29 @@ class FortniteTracksGUI:
         status = entry['status'] if entry else None
 
         if status == 'Downloading':
-            download_text = "Downloading..."
+            full_export_text = "Downloading..."
         elif status == 'Waiting' and self.downloading:
-            download_text = "Waiting in queue..."
+            full_export_text = "Waiting in queue..."
         else:
-            download_text = {'Done': "⬇  Download Again", 'Failed': "⬇  Retry"}.get(status, "⬇  Download")
-        download_button = ttk.Button(self.song_info_frame, text=download_text, style="Accent.TButton",
-                                     command=lambda: self.download_now(song))
-        download_button.pack(fill=tk.X, padx=10)
+            full_export_text = {'Done': "⚡  Full Export Again", 'Failed': "⚡  Retry Full Export"}.get(status, "⚡  Full Export (Stems + Charts)")
+        full_export_button = ttk.Button(self.song_info_frame, text=full_export_text, style="Accent.TButton",
+                                         command=lambda: self.download_now(song, full_export=True))
+        full_export_button.pack(fill=tk.X, padx=10)
         if status == 'Downloading' or (status == 'Waiting' and self.downloading):
-            download_button.state(['disabled'])
+            full_export_button.state(['disabled'])
 
-        chart_button = ttk.Button(self.song_info_frame, text="📄  Export .chart & MIDI Only",
+        sub_buttons_frame = ttk.Frame(self.song_info_frame)
+        sub_buttons_frame.pack(fill=tk.X, padx=10, pady=(6, 0))
+
+        stems_button = ttk.Button(sub_buttons_frame, text="🎵  Stems Only",
+                                  command=lambda: self.download_now(song, full_export=False))
+        stems_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 3))
+        if status == 'Downloading' or (status == 'Waiting' and self.downloading):
+            stems_button.state(['disabled'])
+
+        chart_button = ttk.Button(sub_buttons_frame, text="📄  Chart Only",
                                   command=lambda: self.export_chart_only(song))
-        chart_button.pack(fill=tk.X, padx=10, pady=(6, 0))
+        chart_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(3, 0))
         if not song.get('mu'):
             chart_button.state(['disabled'])
 
@@ -1540,7 +1588,7 @@ class FortniteTracksGUI:
         buttons.pack(fill=tk.X, padx=10, pady=(8, 0))
         in_queue = status in ('Waiting', 'Downloading')
         add_button = ttk.Button(buttons, text="✓  In Queue" if in_queue else "+  Add to Queue",
-                                command=lambda: self.add_to_queue(song))
+                                command=lambda: self.add_to_queue(song, full_export=True))
         if in_queue:
             add_button.state(['disabled'])
 
