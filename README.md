@@ -16,6 +16,7 @@ An advanced GUI tool to download and extract **Fortnite Festival** music tracks 
 ✅ **Download Fortnite Festival songs** directly using their track IDs  
 ✅ **Extract audio stems** (Drums, Bass, Lead, Vocals, Other) in multiple formats (`wav`, `mp3`, `flac`)  
 ✅ **Extract Multi-track MIDI files** – Export `notes.mid` (decrypted official Harmonix multi-track MIDI), `song.ini` (song metadata & difficulty ratings), and `album.png`  
+✅ **Missing Songs Detection & Sync** – Scan your local folder, view what songs are missing, filter the library to missing songs only, and queue all missing tracks in 1 click  
 ✅ **1-Click Full Export** – Download all stems, MIDI, and metadata together in one unified folder  
 ✅ **Quick MIDI Export** – Download only the `notes.mid`, `song.ini`, and album art in seconds without needing to download large audio files  
 ✅ **User-friendly GUI** with dark/light Sun Valley theme    
@@ -51,9 +52,11 @@ The program is written to `dist/`. To run without building: `python FFR.py`.
 ## 🎛 Usage
 1. Launch **Festival MIDI Extractor**
 2. Search for a song or browse the list
-3. Click on a track to view details
+3. Click on a track to view details and check if it's already in your library folder
 4. Press **⚡ Full Export (Stems + MIDI)** to start the extraction
 5. Audio stems, `notes.mid`, `song.ini`, and `album.png` will all be saved together in the exact same song folder (ready to drag & drop into Clone Hero / YARG)
+6. Press **📥 Download Missing** to scan your destination folder, view missing songs, and queue them all with 1 click
+7. Check **Missing only** next to search to quickly filter your song library to tracks not yet downloaded
 
 ## ⚙️ Settings
 - **Sorting Options**: Sort tracks by name, artist, or last added  

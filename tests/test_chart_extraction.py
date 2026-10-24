@@ -124,6 +124,68 @@ class TestChartExtraction(unittest.TestCase):
             self.assertFalse(os.path.exists(legacy_stems), "Legacy stems folder should be removed after merge")
             self.assertFalse(os.path.exists(legacy_chart), "Legacy chart folder should be removed after merge")
 
+    def test_scan_downloaded_status_and_is_downloaded(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            class DummyApp:
+                def __init__(self, folder):
+                    self.extract_folder = folder
+                    self.songs = []
+                sanitize_folder_name = FortniteTracksGUI.sanitize_folder_name
+                get_song_folder = FortniteTracksGUI.get_song_folder
+                scan_downloaded_status = FortniteTracksGUI.scan_downloaded_status
+                is_song_downloaded = FortniteTracksGUI.is_song_downloaded
+
+            app = DummyApp(tmpdir)
+
+            song_dl = {"title": "Butter Barn Hoedown", "artist": "Epic Games", "sid": "1"}
+            song_legacy = {"title": "Legacy Track", "artist": "Artist", "sid": "2"}
+            song_missing = {"title": "Missing Track", "artist": "Nobody", "sid": "3"}
+            song_empty = {"title": "Empty Folder Track", "artist": "Nobody", "sid": "4"}
+            song_zero_byte = {"title": "Corrupt Track", "artist": "Nobody", "sid": "5"}
+
+            # Setup folders:
+            # 1. Downloaded song with valid wav stem
+            f1 = os.path.join(tmpdir, "Butter Barn Hoedown")
+            os.makedirs(f1, exist_ok=True)
+            with open(os.path.join(f1, "Lead.wav"), "wb") as f:
+                f.write(b"RIFF" + b"\x00" * 100)
+
+            # 2. Legacy song in "- stems" folder
+            f2 = os.path.join(tmpdir, "Legacy Track - stems")
+            os.makedirs(f2, exist_ok=True)
+            with open(os.path.join(f2, "Drums.flac"), "wb") as f:
+                f.write(b"fLaC" + b"\x00" * 100)
+
+            # 3. Empty folder (e.g. aborted before downloading any stems)
+            f4 = os.path.join(tmpdir, "Empty Folder Track")
+            os.makedirs(f4, exist_ok=True)
+
+            # 4. Folder with only 0-byte file
+            f5 = os.path.join(tmpdir, "Corrupt Track")
+            os.makedirs(f5, exist_ok=True)
+            with open(os.path.join(f5, "Lead.wav"), "wb") as f:
+                pass
+
+            songs = [song_dl, song_legacy, song_missing, song_empty, song_zero_byte]
+            app.songs = songs
+
+            # Test single checks
+            self.assertTrue(app.is_song_downloaded(song_dl))
+            self.assertTrue(app.is_song_downloaded(song_legacy))
+            self.assertFalse(app.is_song_downloaded(song_missing))
+            self.assertFalse(app.is_song_downloaded(song_empty))
+            self.assertFalse(app.is_song_downloaded(song_zero_byte))
+
+            # Test batch scanning
+            downloaded, missing = app.scan_downloaded_status(songs)
+            self.assertEqual(len(downloaded), 2)
+            self.assertEqual(len(missing), 3)
+            self.assertIn(song_dl, downloaded)
+            self.assertIn(song_legacy, downloaded)
+            self.assertIn(song_missing, missing)
+            self.assertIn(song_empty, missing)
+            self.assertIn(song_zero_byte, missing)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,7 @@ import sv_ttk
 import requests
 from PIL import Image, ImageTk
 from io import BytesIO
+import unicodedata
 import os
 import sys
 import json
@@ -309,6 +310,7 @@ class FortniteTracksGUI:
         top_bar = ttk.Frame(self.root, padding=(16, 14, 16, 10))
         top_bar.pack(fill=tk.X)
         ttk.Button(top_bar, text="⚙  Settings", command=self.open_settings_window).pack(side=tk.RIGHT)
+        ttk.Button(top_bar, text="📥  Download Missing", command=self.open_missing_songs_window).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(top_bar, text="⚡  Full Export All", command=self.full_export_all_songs).pack(side=tk.RIGHT, padx=(0, 8))
         self.song_count_label = ttk.Label(top_bar, text="Loading songs...", style="Muted.TLabel")
         self.song_count_label.pack(side=tk.RIGHT, padx=14)
@@ -321,6 +323,10 @@ class FortniteTracksGUI:
         self.search_entry.bind("<FocusOut>", self.show_search_placeholder)
         self.search_placeholder_shown = False
         self.show_search_placeholder()
+
+        self.only_missing_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(top_bar, text="Missing only", variable=self.only_missing_var,
+                        command=self.search_songs).pack(side=tk.LEFT, padx=(10, 0))
 
         # Bottom bar - status and progress, visible from every tab
         status_bar = ttk.Frame(self.root, padding=(16, 10, 16, 14))
@@ -377,6 +383,7 @@ class FortniteTracksGUI:
 
         ttk.Button(self.queue_frame, text="⬇  Download All in Queue", style="Accent.TButton",
                    command=self.download_all_queue).pack(fill=tk.X, pady=(10, 0))
+        ttk.Button(self.queue_frame, text="📥  Download Missing Songs", command=self.download_missing_songs_direct).pack(fill=tk.X, pady=(6, 0))
         ttk.Button(self.queue_frame, text="⚡  Full Export All Songs", command=self.full_export_all_songs).pack(fill=tk.X, pady=(6, 0))
         queue_buttons = ttk.Frame(self.queue_frame)
         queue_buttons.pack(fill=tk.X, pady=(8, 0))
@@ -576,9 +583,27 @@ class FortniteTracksGUI:
         self.add_to_queue(song, full_export=full_export)
         self.start_queue()
 
+    def queue_songs_for_export(self, songs_to_export, full_export=True):
+        """Add a list of songs to the queue for Full Export and start downloading"""
+        added_count = 0
+        for song in songs_to_export:
+            entry = self.find_queue_entry(song)
+            if not entry:
+                self.song_queue.append({'song': song, 'status': 'Waiting', 'error': '', 'full_export': full_export})
+                added_count += 1
+            elif entry['status'] in ('Done', 'Failed'):
+                entry['status'], entry['error'] = 'Waiting', ''
+                entry['full_export'] = full_export
+                added_count += 1
+
+        self.refresh_queue_view()
+        self.update_song_info_display()
+        self.start_queue()
+        return added_count
+
     def full_export_all_songs(self):
         """Add all visible/filtered songs to the queue for Full Export and start downloading immediately"""
-        query = self.search_var.get().strip() if hasattr(self, 'search_var') and not getattr(self, 'search_placeholder_shown', False) else ""
+        query = self.get_search_query() if hasattr(self, 'get_search_query') else ""
         songs_to_export = self.filtered_songs if hasattr(self, 'filtered_songs') and self.filtered_songs else self.songs
         count = len(songs_to_export)
         if not count:
@@ -593,21 +618,115 @@ class FortniteTracksGUI:
         if not messagebox.askyesno("Full Export All Songs", prompt):
             return
 
-        added_count = 0
-        for song in songs_to_export:
-            entry = self.find_queue_entry(song)
-            if not entry:
-                self.song_queue.append({'song': song, 'status': 'Waiting', 'error': '', 'full_export': True})
-                added_count += 1
-            elif entry['status'] in ('Done', 'Failed'):
-                entry['status'], entry['error'] = 'Waiting', ''
-                entry['full_export'] = True
-                added_count += 1
-
-        self.refresh_queue_view()
-        self.update_song_info_display()
-        self.start_queue()
+        added_count = self.queue_songs_for_export(songs_to_export)
         messagebox.showinfo("Full Export Started", f"Queued {added_count} song(s) for Full Export!")
+
+    def open_missing_songs_window(self):
+        """Open the Missing Songs Scanner window to view missing songs and queue them for download"""
+        if hasattr(self, "missing_window") and self.missing_window.winfo_exists():
+            self.missing_window.lift()
+            return
+
+        query = self.get_search_query() if hasattr(self, 'get_search_query') else ""
+        target_songs = self.filtered_songs if query and hasattr(self, 'filtered_songs') and self.filtered_songs else self.songs
+        downloaded, missing = self.scan_downloaded_status(target_songs)
+
+        window = self.missing_window = tk.Toplevel(self.root)
+        window.title("Missing Songs Scanner")
+        window.transient(self.root)
+        window.geometry("720x530")
+        window.minsize(580, 400)
+
+        container = ttk.Frame(window, padding=16)
+        container.pack(fill=tk.BOTH, expand=True)
+
+        header = ttk.Frame(container)
+        header.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(header, text="Missing Songs Scanner", style="Title.TLabel").pack(anchor="w")
+        folder_display = self.extract_folder if len(self.extract_folder) <= 65 else self.extract_folder[:30] + "..." + self.extract_folder[-32:]
+        ttk.Label(header, text=f"Folder: {folder_display}", style="Muted.TLabel").pack(anchor="w", pady=(2, 6))
+
+        scope_desc = f" (filtered by '{query}')" if query else ""
+        stats_text = f"Total scanned{scope_desc}: {len(target_songs)} songs   |   ✅ In folder: {len(downloaded)}   |   ❌ Missing: {len(missing)}"
+        ttk.Label(header, text=stats_text).pack(anchor="w")
+
+        if not missing:
+            empty_frame = ttk.Frame(container, padding=20)
+            empty_frame.pack(fill=tk.BOTH, expand=True)
+            ttk.Label(empty_frame, text="🎉 All songs are already downloaded!", style="Title.TLabel").pack(pady=(40, 10))
+            ttk.Label(empty_frame, text="Every song in this selection is already present in your destination folder.", style="Muted.TLabel").pack(pady=(0, 20))
+            btn_frame = ttk.Frame(empty_frame)
+            btn_frame.pack()
+            ttk.Button(btn_frame, text="📂 Open Folder", command=lambda: self.open_folder_in_explorer(self.extract_folder)).pack(side=tk.LEFT, padx=6)
+            ttk.Button(btn_frame, text="Close", command=window.destroy).pack(side=tk.LEFT, padx=6)
+            return
+
+        list_frame = ttk.Frame(container)
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=(6, 12))
+
+        missing_tree = ttk.Treeview(list_frame, columns=("num", "artist", "title"), show="headings", selectmode="extended")
+        missing_tree.heading("num", text="#", anchor="w")
+        missing_tree.heading("artist", text="Artist", anchor="w")
+        missing_tree.heading("title", text="Title", anchor="w")
+        missing_tree.column("num", width=45, stretch=False, anchor="w")
+        missing_tree.column("artist", width=250, anchor="w")
+        missing_tree.column("title", width=330, anchor="w")
+
+        scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=missing_tree.yview)
+        missing_tree.configure(yscrollcommand=scroll.set)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        missing_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        for idx, song in enumerate(missing, 1):
+            missing_tree.insert('', 'end', iid=str(idx - 1), values=(idx, song.get('artist', 'Unknown'), song.get('title', 'Unknown')))
+
+        btn_bar = ttk.Frame(container)
+        btn_bar.pack(fill=tk.X)
+
+        def download_all_missing_action():
+            window.destroy()
+            self.queue_songs_for_export(missing)
+            self.notebook.select(self.queue_frame)
+            messagebox.showinfo("Queue Started", f"Queued {len(missing)} missing song(s) for Full Export!")
+
+        def queue_selected_missing_action():
+            selected_iids = missing_tree.selection()
+            if not selected_iids:
+                messagebox.showinfo("No Selection", "Please select one or more songs from the list to queue.")
+                return
+            selected_songs = [missing[int(i)] for i in selected_iids if int(i) < len(missing)]
+            window.destroy()
+            self.queue_songs_for_export(selected_songs)
+            self.notebook.select(self.queue_frame)
+            messagebox.showinfo("Queue Started", f"Queued {len(selected_songs)} selected missing song(s) for Full Export!")
+
+        ttk.Button(btn_bar, text=f"⚡  Download All Missing ({len(missing)})", style="Accent.TButton",
+                   command=download_all_missing_action).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(btn_bar, text="⬇  Queue Selected", command=queue_selected_missing_action).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(btn_bar, text="📂  Open Folder", command=lambda: self.open_folder_in_explorer(self.extract_folder)).pack(side=tk.LEFT)
+        ttk.Button(btn_bar, text="Close", command=window.destroy).pack(side=tk.RIGHT)
+
+    def download_missing_songs_direct(self):
+        """Directly scan folder and prompt to queue all missing songs"""
+        query = self.get_search_query() if hasattr(self, 'get_search_query') else ""
+        target_songs = self.filtered_songs if query and hasattr(self, 'filtered_songs') and self.filtered_songs else self.songs
+        downloaded, missing = self.scan_downloaded_status(target_songs)
+
+        if not missing:
+            messagebox.showinfo("All Songs Downloaded",
+                                f"All {len(downloaded)} songs in the library are already downloaded in:\n{self.extract_folder}")
+            return
+
+        scope = f" matching '{query}'" if query else ""
+        prompt = (f"Scan results for folder:\n{self.extract_folder}\n\n"
+                  f"• Already downloaded: {len(downloaded)} song(s)\n"
+                  f"• Missing: {len(missing)} song(s){scope}\n\n"
+                  f"Add all {len(missing)} missing songs to the queue for Full Export and start downloading?")
+        if messagebox.askyesno("Download Missing Songs", prompt):
+            self.queue_songs_for_export(missing)
+            self.notebook.select(self.queue_frame)
+            messagebox.showinfo("Queue Started", f"Queued {len(missing)} missing song(s) for Full Export!")
 
     def check_easter_egg(self, query):
         """Check for easter egg and handle it"""
@@ -1298,10 +1417,12 @@ class FortniteTracksGUI:
 
         muted = "#a0a0a0" if self.dark_mode else "#5f5f5f"
         link = "#57c8ff" if self.dark_mode else "#005fb8"
+        success = "#3fb950" if self.dark_mode else "#1a7f37"
         if not hasattr(self, "link_font"):
             self.link_font = tkfont.nametofont("SunValleyBodyFont").copy()
             self.link_font.configure(underline=True)
         self.style.configure("Muted.TLabel", foreground=muted)
+        self.style.configure("Success.TLabel", foreground=success)
         self.style.configure("Placeholder.TEntry", foreground=muted)
         self.style.configure("Link.TLabel", foreground=link, font=self.link_font)
         self.style.configure("Title.TLabel", font="SunValleySubtitleFont")
@@ -1322,6 +1443,10 @@ class FortniteTracksGUI:
             self.extract_folder = folder_selected
             self.folder_var.set(self.extract_folder)
             self.save_settings()
+            if hasattr(self, 'search_songs'):
+                self.search_songs()
+            if hasattr(self, 'current_song_info') and self.current_song_info:
+                self.update_song_info_display()
 
     def save_settings(self):
         self.file_format = self.file_format_var.get()
@@ -1415,9 +1540,17 @@ class FortniteTracksGUI:
             query = ""
 
         if query:
-            self.filtered_songs = [song for song in self.songs if query in song['title'].lower() or query in song['artist'].lower()]
+            filtered = [song for song in self.songs if query in song['title'].lower() or query in song['artist'].lower()]
         else:
-            self.filtered_songs = self.songs.copy()
+            filtered = self.songs.copy()
+
+        # If "Missing only" filter is active, only show songs not downloaded in destination folder
+        if getattr(self, 'only_missing_var', None) and self.only_missing_var.get():
+            downloaded_list, _ = self.scan_downloaded_status(self.songs)
+            downloaded_sids = {s.get('sid') or (s.get('title'), s.get('artist')) for s in downloaded_list}
+            filtered = [s for s in filtered if (s.get('sid') or (s.get('title'), s.get('artist'))) not in downloaded_sids]
+
+        self.filtered_songs = filtered
         self.display_songs(self.filtered_songs)
 
     def fetch_json_data(self, url):
@@ -1496,7 +1629,14 @@ class FortniteTracksGUI:
 
         total = len(self.songs)
         shown = len(sorted_songs)
-        self.song_count_label.config(text=f"{total:,} songs" if shown == total else f"{shown:,} of {total:,} songs")
+        is_missing_filter = getattr(self, 'only_missing_var', None) and self.only_missing_var.get()
+        if is_missing_filter:
+            count_txt = f"{shown:,} missing of {total:,} songs"
+        elif shown == total:
+            count_txt = f"{total:,} songs"
+        else:
+            count_txt = f"{shown:,} of {total:,} songs"
+        self.song_count_label.config(text=count_txt)
 
     def seconds_to_minutes_seconds(self, seconds):
         minutes = seconds // 60
@@ -1552,7 +1692,13 @@ class FortniteTracksGUI:
 
         ttk.Label(self.song_info_frame, text=song['title'], style="Title.TLabel", wraplength=330, justify="center").pack()
         ttk.Label(self.song_info_frame, text=song['artist'], style="Muted.TLabel", wraplength=330, justify="center").pack()
-        ttk.Label(self.song_info_frame, text=self.song_meta_line(song), style="Muted.TLabel").pack(pady=(4, 14))
+        ttk.Label(self.song_info_frame, text=self.song_meta_line(song), style="Muted.TLabel").pack(pady=(4, 6))
+
+        # Show download presence in local destination folder
+        is_dl = self.is_song_downloaded(song)
+        status_text = "✓ Downloaded in library folder" if is_dl else "• Not in library folder"
+        status_style = "Success.TLabel" if is_dl else "Muted.TLabel"
+        ttk.Label(self.song_info_frame, text=status_text, style=status_style).pack(pady=(0, 10))
 
         entry = self.find_queue_entry(song)
         status = entry['status'] if entry else None
@@ -1693,6 +1839,89 @@ class FortniteTracksGUI:
 
         os.makedirs(primary_folder, exist_ok=True)
         return primary_folder
+
+    def scan_downloaded_status(self, songs_list=None):
+        """Scans self.extract_folder and partitions songs into (downloaded, missing)"""
+        if songs_list is None:
+            songs_list = self.songs
+
+        if not hasattr(self, 'extract_folder') or not self.extract_folder or not os.path.isdir(self.extract_folder):
+            return [], list(songs_list)
+
+        try:
+            entries = os.listdir(self.extract_folder)
+        except OSError:
+            return [], list(songs_list)
+
+        # Build case-insensitive folder map: normalized name -> full path
+        folder_map = {}
+        for entry in entries:
+            full_path = os.path.join(self.extract_folder, entry)
+            if os.path.isdir(full_path):
+                norm = unicodedata.normalize('NFC', entry).strip().rstrip('. ').lower()
+                folder_map[norm] = full_path
+
+        folder_valid_cache = {}
+
+        def folder_has_song_files(folder_path):
+            if folder_path in folder_valid_cache:
+                return folder_valid_cache[folder_path]
+            try:
+                items = os.listdir(folder_path)
+            except OSError:
+                folder_valid_cache[folder_path] = False
+                return False
+
+            valid_audio = ('.wav', '.mp3', '.flac', '.ogg')
+            for it in items:
+                p = os.path.join(folder_path, it)
+                try:
+                    if os.path.isfile(p) and os.path.getsize(p) > 0:
+                        it_lower = it.lower()
+                        if it_lower.endswith(valid_audio) or it_lower in ('notes.mid', 'notes.chart') or it_lower.endswith('.mid'):
+                            folder_valid_cache[folder_path] = True
+                            return True
+                except OSError:
+                    continue
+
+            folder_valid_cache[folder_path] = False
+            return False
+
+        downloaded = []
+        missing = []
+
+        for song in songs_list:
+            title = song.get('title', '')
+            artist = song.get('artist', '')
+            safe_title = unicodedata.normalize('NFC', self.sanitize_folder_name(title)).strip().rstrip('. ').lower()
+            safe_artist = unicodedata.normalize('NFC', self.sanitize_folder_name(artist)).strip().rstrip('. ').lower()
+
+            variants = [
+                safe_title,
+                f"{safe_title} - stems",
+                f"{safe_title} - chart",
+                f"{safe_artist} - {safe_title}",
+                f"{safe_title} - {safe_artist}"
+            ]
+
+            found = False
+            for v in variants:
+                if v and v in folder_map:
+                    if folder_has_song_files(folder_map[v]):
+                        found = True
+                        break
+
+            if found:
+                downloaded.append(song)
+            else:
+                missing.append(song)
+
+        return downloaded, missing
+
+    def is_song_downloaded(self, song):
+        """Check if a specific song is already downloaded in self.extract_folder"""
+        downloaded, _ = self.scan_downloaded_status([song])
+        return len(downloaded) > 0
 
     def generate_filename(self, stem_name, song_title, artist_name, file_extension):
         """Generate filename based on user's naming preference"""
